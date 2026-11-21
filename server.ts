@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express from 'express';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -12,11 +13,33 @@ import type { StoredUser } from './server/authStore.ts';
 
 const PORT = Number(process.env.PORT) || 3000;
 const app = express();
-const store = new AuthStore();
+const store = new AuthStore(process.env.DATA_DIR || undefined);
 const authLimiter = new SlidingWindowRateLimiter(30, 60_000);
+
+const allowedOrigins = (process.env.CORS_ORIGIN || '')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
 
 app.disable('x-powered-by');
 app.use(express.json({ limit: '100kb' }));
+
+if (allowedOrigins.length > 0) {
+  app.use('/api', (req, res, next) => {
+    const origin = req.headers.origin;
+    if (origin && allowedOrigins.includes(origin)) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Vary', 'Origin');
+      res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
+    }
+    if (req.method === 'OPTIONS') {
+      res.status(204).end();
+      return;
+    }
+    next();
+  });
+}
 
 interface AuthedRequest extends express.Request {
   user?: StoredUser;
@@ -237,11 +260,16 @@ app.post('/api/profile/molecules', requireAuth, (req: AuthedRequest, res) => {
   res.json({ user: updated });
 });
 
+app.use('/api', (_req, res) => {
+  res.status(404).json({ error: 'Маршрут API не найден.' });
+});
+
 async function startServer() {
   const distDir = path.resolve(process.cwd(), 'dist');
-  const isProd = process.env.NODE_ENV === 'production' && fs.existsSync(distDir);
+  const hasDist = fs.existsSync(path.join(distDir, 'index.html'));
+  const useViteDev = process.env.NODE_ENV === 'development' || !hasDist;
 
-  if (!isProd) {
+  if (useViteDev) {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
@@ -249,14 +277,16 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    app.use(express.static(distDir));
+    app.use(express.static(distDir, { index: false }));
     app.get('*', (_req, res) => {
       res.sendFile(path.join(distDir, 'index.html'));
     });
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`ChemEdu server running on http://localhost:${PORT}`);
+    console.log(
+      `ChemEdu server running on http://localhost:${PORT} (${useViteDev ? 'development' : 'production'})`,
+    );
   });
 }
 

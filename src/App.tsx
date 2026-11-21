@@ -10,6 +10,7 @@ import type {
 import { getTopicById } from './data/topics';
 import { getReactionById } from './data/reactions';
 import { getMoleculeById } from './data/molecules';
+import { portalApi } from './services/portalApi';
 import { Layout, type BreadcrumbItem } from './components/Layout';
 import { HomeView } from './components/HomeView';
 import { SectionView } from './components/SectionView';
@@ -65,14 +66,7 @@ export default function App() {
     setRoute({ page: 'home' });
     showToast({ text: 'Вы вышли из личного кабинета.', tone: 'info' });
     if (currentToken) {
-      try {
-        await fetch('/api/auth/logout', {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${currentToken}` },
-        });
-      } catch {
-        // Session already cleared locally
-      }
+      await portalApi.logout(currentToken);
     }
   }, [authToken, showToast]);
 
@@ -87,25 +81,15 @@ export default function App() {
         });
         return;
       }
-      try {
-        const res = await fetch('/api/profile/topic-toggle', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${authToken}`,
-          },
-          body: JSON.stringify({ topicId }),
+      const res = await portalApi.toggleTopic(authToken, topicId);
+      if (res.ok && res.data.user) {
+        const isNowDone = res.data.user.completedTopicIds.includes(topicId);
+        setUser(res.data.user);
+        showToast({
+          text: isNowDone ? 'Тема отмечена как пройденная.' : 'Отметка о прохождении темы снята.',
+          tone: 'success',
         });
-        const data = await res.json();
-        if (res.ok && data.user) {
-          const isNowDone = data.user.completedTopicIds.includes(topicId);
-          setUser(data.user);
-          showToast({
-            text: isNowDone ? 'Тема отмечена как пройденная.' : 'Отметка о прохождении темы снята.',
-            tone: 'success',
-          });
-        }
-      } catch {
+      } else {
         showToast({ text: 'Не удалось обновить статус темы.', tone: 'error' });
       }
     },
@@ -117,21 +101,9 @@ export default function App() {
       if (!authToken || !user) {
         return;
       }
-      try {
-        const res = await fetch('/api/profile/attempts', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${authToken}`,
-          },
-          body: JSON.stringify(attempt),
-        });
-        const data = await res.json();
-        if (res.ok && data.user) {
-          setUser(data.user);
-        }
-      } catch {
-        // Non-blocking: local task check feedback is already shown
+      const res = await portalApi.recordAttempt(authToken, attempt);
+      if (res.ok && res.data.user) {
+        setUser(res.data.user);
       }
     },
     [authToken, user],
@@ -148,29 +120,19 @@ export default function App() {
         });
         return;
       }
-      try {
-        const res = await fetch('/api/profile/reactions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${authToken}`,
-          },
-          body: JSON.stringify({
-            reactionId: rx.id,
-            equation: rx.equation,
-            productName: rx.productName,
-          }),
+      const res = await portalApi.toggleReaction(authToken, {
+        reactionId: rx.id,
+        equation: rx.equation,
+        productName: rx.productName,
+      });
+      if (res.ok && res.data.user) {
+        const saved = res.data.user.savedReactions.some((r) => r.reactionId === rx.id);
+        setUser(res.data.user);
+        showToast({
+          text: saved ? 'Реакция сохранена в личном кабинете.' : 'Реакция удалена из сохранённых.',
+          tone: 'success',
         });
-        const data = await res.json();
-        if (res.ok && data.user) {
-          const saved = data.user.savedReactions.some((r: { reactionId: string }) => r.reactionId === rx.id);
-          setUser(data.user);
-          showToast({
-            text: saved ? 'Реакция сохранена в личном кабинете.' : 'Реакция удалена из сохранённых.',
-            tone: 'success',
-          });
-        }
-      } catch {
+      } else {
         showToast({ text: 'Не удалось сохранить реакцию.', tone: 'error' });
       }
     },
@@ -188,29 +150,19 @@ export default function App() {
         });
         return;
       }
-      try {
-        const res = await fetch('/api/profile/molecules', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${authToken}`,
-          },
-          body: JSON.stringify({
-            moleculeId: mol.id,
-            name: mol.name,
-            formula: mol.formula,
-          }),
+      const res = await portalApi.toggleMolecule(authToken, {
+        moleculeId: mol.id,
+        name: mol.name,
+        formula: mol.formula,
+      });
+      if (res.ok && res.data.user) {
+        const saved = res.data.user.savedMolecules.some((m) => m.moleculeId === mol.id);
+        setUser(res.data.user);
+        showToast({
+          text: saved ? `Молекула «${mol.name}» сохранена в профиле.` : `Молекула «${mol.name}» удалена из профиля.`,
+          tone: 'success',
         });
-        const data = await res.json();
-        if (res.ok && data.user) {
-          const saved = data.user.savedMolecules.some((m: { moleculeId: string }) => m.moleculeId === mol.id);
-          setUser(data.user);
-          showToast({
-            text: saved ? `Молекула «${mol.name}» сохранена в профиле.` : `Молекула «${mol.name}» удалена из профиля.`,
-            tone: 'success',
-          });
-        }
-      } catch {
+      } else {
         showToast({ text: 'Не удалось сохранить молекулу.', tone: 'error' });
       }
     },

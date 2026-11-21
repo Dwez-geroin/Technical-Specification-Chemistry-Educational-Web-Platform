@@ -20,6 +20,11 @@ import {
   validateRegistrationInput,
   SlidingWindowRateLimiter,
 } from '../../server/authStore';
+import {
+  createStaticPortalStore,
+  hashPasswordBrowser,
+  verifyPasswordBrowser,
+} from '../services/portalApi';
 
 test('normalizeFormula handles Unicode subscripts, case, spaces, and hyphens', () => {
   assert.equal(normalizeFormula('H₂SO₄'), 'H2SO4');
@@ -138,3 +143,65 @@ test('server authStore hashes and verifies passwords via scrypt and enforces val
   assert.equal(limiter.allow('ip-1', 1200), false);
   assert.equal(limiter.allow('ip-1', 2100), true);
 });
+
+test('static GitHub Pages fallback mode hashes passwords with PBKDF2 and persists user progress', async () => {
+  const hash = await hashPasswordBrowser('StaticPass2026');
+  assert.ok(hash.startsWith('pbkdf2:'));
+  assert.equal(await verifyPasswordBrowser('StaticPass2026', hash), true);
+  assert.equal(await verifyPasswordBrowser('WrongPass', hash), false);
+
+  const backing = new Map<string, string>();
+  const store = createStaticPortalStore({
+    getItem: (k) => backing.get(k) ?? null,
+    setItem: (k, v) => {
+      backing.set(k, v);
+    },
+  });
+
+  // Demo login works autonomously
+  const demoRes = await store.demoLogin();
+  assert.equal(demoRes.ok, true);
+  if (demoRes.ok) {
+    assert.equal(demoRes.data.user.email, 'student@chem-edu.ru');
+  }
+
+  // Register -> Activate -> Toggle Topic -> Save Reaction -> Logout
+  const reg = await store.register({
+    fullName: 'Смирнова Ольга',
+    email: 'olga@github-pages.ru',
+    role: 'student',
+    password: 'myPassword99',
+    consent: true,
+    captchaA: 4,
+    captchaB: 5,
+    captchaAnswer: 9,
+  });
+  assert.equal(reg.ok, true);
+  if (!reg.ok) return;
+
+  const act = await store.activate(reg.data.activationToken);
+  assert.equal(act.ok, true);
+  if (!act.ok) return;
+
+  const topicToggle = await store.toggleTopic(act.data.token, 'org-base-alkanes');
+  assert.equal(topicToggle.ok, true);
+  if (topicToggle.ok) {
+    assert.ok(topicToggle.data.user.completedTopicIds.includes('org-base-alkanes'));
+  }
+
+  const rxSave = await store.toggleReaction(act.data.token, {
+    reactionId: 'rx-1',
+    equation: 'C2H4 + H2O → C2H5OH',
+    productName: 'Этанол',
+  });
+  assert.equal(rxSave.ok, true);
+  if (rxSave.ok) {
+    assert.equal(rxSave.data.user.savedReactions.length, 1);
+  }
+
+  // Logout revokes in-memory token
+  await store.logout(act.data.token);
+  const afterLogout = await store.toggleTopic(act.data.token, 'org-base-alkanes');
+  assert.equal(afterLogout.ok, false);
+});
+
