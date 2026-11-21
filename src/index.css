@@ -1,0 +1,72 @@
+@import "tailwindcss";
+
+@theme {
+  --font-display: "Manrope", system-ui, -apple-system, sans-serif;
+  --font-sans: "PT Sans", system-ui, -apple-system, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
+
+  --color-canvas: #F5F7F4;
+  --color-surface: #FFFFFF;
+  --color-surface-muted: #EDF1EC;
+  --color-ink: #2E3B36;
+  --color-ink-muted: #52635C;
+  --color-organic: #4F8A6E;
+  --color-organic-strong: #3A6E56;
+  --color-organic-soft: #EBF3EE;
+  --color-inorganic: #5B7FA6;
+  --color-inorganic-strong: #44658A;
+  --color-inorganic-soft: #ECF2F7;
+  --color-action: #6E9C8F;
+  --color-action-strong: #437265;
+  --color-warn: #B8735A;
+  --color-warn-strong: #8F4F39;
+  --color-warn-soft: #F9EFEA;
+  --color-success: #7BA05B;
+  --color-success-strong: #4E6D35;
+  --color-success-soft: #EFF5EA;
+  --color-divider: #DDE3DF;
+}
+
+@layer base {
+  html {
+    font-family: var(--font-sans);
+    background-color: var(--color-canvas);
+    color: var(--color-ink);
+    scroll-behavior: smooth;
+  }
+
+  h1, h2, h3, h4, .font-display {
+    font-family: var(--font-display);
+    text-wrap: balance;
+  }
+
+  button, a, input, select, textarea {
+    outline-color: #437265;
+  }
+
+  :focus-visible {
+    outline: 2px solid #437265;
+    outline-offset: 2px;
+  }
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Custom subtle scrollbars for wide periodic/solubility tables */
+.chem-scroll::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+.chem-scroll::-webkit-scrollbar-track {
+  background: #EDF1EC;
+  border-radius: 4px;
+}
+.chem-scroll::-webkit-scrollbar-thumb {
+  background: #C4D0C9;
+  border-radius: 4px;
+}
+.chem-scroll::-webkit-scrollbar-thumb:hover {
+  background: #9EB0A6;
+}
