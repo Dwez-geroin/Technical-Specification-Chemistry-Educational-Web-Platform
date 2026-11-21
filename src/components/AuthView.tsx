@@ -10,7 +10,6 @@ import {
   UserPlus,
 } from 'lucide-react';
 import type { AppRoute, UserProfile, UserRole } from '../types/chemistry';
-import { portalApi } from '../services/portalApi';
 
 interface AuthViewProps {
   mode: 'login' | 'register' | 'reset';
@@ -75,12 +74,19 @@ export const AuthView: React.FC<AuthViewProps> = ({
     setInfoMsg(null);
     setLoading(true);
     try {
-      const res = await portalApi.login(loginEmail.trim(), loginPassword);
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: loginEmail.trim(), password: loginPassword }),
+      });
+      const data = await res.json();
       if (!res.ok) {
-        setErrorMsg(res.error);
+        setErrorMsg(data.error || 'Не удалось выполнить вход.');
         return;
       }
-      onAuthSuccess(res.data.user, res.data.token, 'Вы успешно вошли в личный кабинет.');
+      onAuthSuccess(data.user, data.token, 'Вы успешно вошли в личный кабинет.');
+    } catch {
+      setErrorMsg('Ошибка соединения с сервером. Повторите попытку.');
     } finally {
       setLoading(false);
     }
@@ -91,12 +97,15 @@ export const AuthView: React.FC<AuthViewProps> = ({
     setInfoMsg(null);
     setLoading(true);
     try {
-      const res = await portalApi.demoLogin();
+      const res = await fetch('/api/auth/demo', { method: 'POST' });
+      const data = await res.json();
       if (!res.ok) {
-        setErrorMsg(res.error);
+        setErrorMsg(data.error || 'Не удалось выполнить демо-вход.');
         return;
       }
-      onAuthSuccess(res.data.user, res.data.token, 'Выполнен вход в демонстрационный профиль ученика.');
+      onAuthSuccess(data.user, data.token, 'Выполнен вход в демонстрационный профиль ученика.');
+    } catch {
+      setErrorMsg('Ошибка соединения с сервером.');
     } finally {
       setLoading(false);
     }
@@ -118,28 +127,35 @@ export const AuthView: React.FC<AuthViewProps> = ({
 
     setLoading(true);
     try {
-      const res = await portalApi.register({
-        fullName: fullName.trim(),
-        email: regEmail.trim(),
-        role: regRole,
-        password: regPassword,
-        consent,
-        captchaA: captcha.a,
-        captchaB: captcha.b,
-        captchaAnswer: Number(captchaAnswer.trim()),
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fullName: fullName.trim(),
+          email: regEmail.trim(),
+          role: regRole,
+          password: regPassword,
+          consent,
+          captchaA: captcha.a,
+          captchaB: captcha.b,
+          captchaAnswer: Number(captchaAnswer.trim()),
+        }),
       });
+      const data = await res.json();
       if (!res.ok) {
-        setErrorMsg(res.error);
+        setErrorMsg(data.error || 'Не удалось завершить регистрацию.');
         setCaptcha(generateCaptcha());
         setCaptchaAnswer('');
         return;
       }
       setPendingActivation({
-        email: res.data.user.email,
-        fullName: res.data.user.fullName,
-        token: res.data.activationToken,
+        email: data.user.email,
+        fullName: data.user.fullName,
+        token: data.activationToken,
       });
-      setInfoMsg(res.data.message || 'Письмо активации отправлено на указанный email.');
+      setInfoMsg(data.message || 'Письмо активации отправлено на указанный email.');
+    } catch {
+      setErrorMsg('Ошибка соединения с сервером. Повторите попытку.');
     } finally {
       setLoading(false);
     }
@@ -150,12 +166,19 @@ export const AuthView: React.FC<AuthViewProps> = ({
     setErrorMsg(null);
     setLoading(true);
     try {
-      const res = await portalApi.activate(pendingActivation.token);
+      const res = await fetch('/api/auth/activate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: pendingActivation.token }),
+      });
+      const data = await res.json();
       if (!res.ok) {
-        setErrorMsg(res.error);
+        setErrorMsg(data.error || 'Не удалось активировать аккаунт.');
         return;
       }
-      onAuthSuccess(res.data.user, res.data.token, 'Email подтверждён, аккаунт активирован.');
+      onAuthSuccess(data.user, data.token, 'Email подтверждён, аккаунт активирован.');
+    } catch {
+      setErrorMsg('Ошибка соединения с сервером.');
     } finally {
       setLoading(false);
     }
@@ -167,16 +190,23 @@ export const AuthView: React.FC<AuthViewProps> = ({
     setInfoMsg(null);
     setLoading(true);
     try {
-      const res = await portalApi.forgotPassword(resetEmail.trim());
+      const res = await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: resetEmail.trim() }),
+      });
+      const data = await res.json();
       if (!res.ok) {
-        setErrorMsg(res.error);
+        setErrorMsg(data.error || 'Не удалось отправить запрос.');
         return;
       }
       setResetEmailSent(true);
-      setInfoMsg(res.data.message);
-      if (res.data.resetToken) {
-        setResetToken(res.data.resetToken);
+      setInfoMsg(data.message);
+      if (data.resetToken) {
+        setResetToken(data.resetToken);
       }
+    } catch {
+      setErrorMsg('Ошибка соединения с сервером.');
     } finally {
       setLoading(false);
     }
@@ -195,13 +225,20 @@ export const AuthView: React.FC<AuthViewProps> = ({
     }
     setLoading(true);
     try {
-      const res = await portalApi.resetPassword(resetToken, newPassword);
+      const res = await fetch('/api/auth/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: resetToken, newPassword }),
+      });
+      const data = await res.json();
       if (!res.ok) {
-        setErrorMsg(res.error);
+        setErrorMsg(data.error || 'Не удалось обновить пароль.');
         return;
       }
       setResetDone(true);
-      setInfoMsg(res.data.message || 'Пароль обновлён.');
+      setInfoMsg(data.message || 'Пароль обновлён.');
+    } catch {
+      setErrorMsg('Ошибка соединения с сервером.');
     } finally {
       setLoading(false);
     }
